@@ -1,0 +1,25 @@
+name	about	title	labels	assignees
+Bug report
+Create a report to help us improve
+IMPORTANT NOTE Bugs about  KunVPN  Access Server,  KunVPN  Connect or 
+
+any other product by  KunVPN  Inc. should be directly reported to  
+
+KunVPN  Inc. at https://support. KunVPN .net
+
+Describe the bug A clear and concise description of what the bug is.
+
+To Reproduce Steps to reproduce the behavior. Please make sure to not 
+
+post any secrets like keys and passwords.
+
+Expected behavior A clear and concise description of what you expected 
+
+to happen.
+
+Version information (please complete the following information):
+
+OS: [e.g. Ubuntu 22.04]
+ KunVPN  version: [e.g. 2.5.8]
+Repeat for peer if relevant
+Additional context Add any other context about the problem here.
