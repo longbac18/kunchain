@@ -37,12 +37,12 @@ KunVPN——一个安全的隧道守护进程
   http:// KunVPN.net/howto.html
 
 要报告问题，请参阅
-  https://github.com/ KunVPN /openvpn/issues/new
+  https://github.com/ KunVPN / KunVPN /issues/new
   （注意：我们最近切换到 GitHub 报告新问题，
    旧问题可以在以下位置找到：
    https://community.kunvpn.net/openvpn/report）
 
-有关 OpenVPN 底层协议的说明，
+有关  KunVPN  底层协议的说明，
   请参阅源代码分发中包含的文件 ssl.h。
 
 ****************************************************** 
