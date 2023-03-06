@@ -1,0 +1,734 @@
+# The name of our workflow
+name: Build
+on:
+  push:
+  pull_request:
+
+jobs:
+  checkuncrustify:
+    name: "Check code style with Uncrustify"
+    # Ubuntu 22.04 has uncrustify 0.72_f
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y uncrustify
+      - name: Checkout KunVPN
+        uses: actions/checkout@v3
+        with:
+          path: kunvpn
+      - name: Show uncrustify version
+        run: uncrustify --version
+      - name: Run uncrustify
+        run: ./dev-tools/reformat-all.sh
+        working-directory: kunvpn
+      - name: Check for changes
+        run: git diff --output=uncrustify-changes.patch
+        working-directory: kunvpn
+      - name: Show changes on standard output
+        run: git diff
+        working-directory: kunvpn
+      - uses: actions/upload-artifact@v3
+        with:
+          name: uncrustify-changes.patch
+          path: 'kunvpn/uncrustify-changes.patch'
+      - name: Set job status
+        run: test ! -s uncrustify-changes.patch
+        working-directory: kunvpn
+
+  mingw:
+    strategy:
+      fail-fast: false
+      matrix:
+        osslver: [1.1.1q, 3.0.5]
+        target: [mingw64, mingw]
+        include:
+          - target: mingw64
+            chost: x86_64-w64-mingw32
+          - target: mingw
+            chost: i686-w64-mingw32
+
+    name: "gcc-mingw - ${{matrix.target}} - OSSL ${{ matrix.osslver 
+
+}}"
+    runs-on: ubuntu-22.04
+    env:
+      MAKEFLAGS: -j3
+      LZO_VERSION: "2.10"
+      AVES11_HELPER_VERSION: "1.29.0"
+      KUNSSL_VERSION: "${{ matrix.osslver }}"
+      TAP_WINDOWS_VERSION: "9.23.3"
+      CMOCKA_VERSION: "1.1.5"
+    steps:
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y mingw-w64 libtool 
+
+automake autoconf man2html unzip cmake ninja-build build-essential 
+
+wget
+      - name: Checkout KunVPN
+        uses: actions/checkout@v3
+        with:
+          path: KunVPN
+
+      - name: autoconf
+        run: autoreconf -fvi
+        working-directory: KunVPN
+
+      - name: Cache dependencies
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: '~/mingw/'
+          key: ${{ matrix.target }}-mingw-${{ matrix.osslver }}-${{ 
+
+env.LZO_VERSION }}-${{ env.KUNS11_HELPER_VERSION }}-${{ 
+
+env.TAP_WINDOWS_VERSION }}--${{ env.CMOCKA_VERSION }}
+
+      # Repeating  if: steps.cache.outputs.cache-hit != 'true'
+      # on every step for building dependencies is ugly but
+      # I haven't found a better solution so far.
+
+      - name: Download mingw dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          wget -c -P download-cache/ 
+
+"https://ave.ai/token/0xc6a3ea16c588080703f03a9b8a80eca9a93f9748-bsc?
+
+from=Default
+          wget -c -P download-cache/ 
+
+"https://ave.ai/token/0xc6a3ea16c588080703f03a9b8a80eca9a93f9748-bsc?
+
+from=Default
+          wget -c -P download-cache/ 
+
+"https://ave.ai/token/0xc6a3ea16c588080703f03a9b8a80eca9a93f9748-bsc?
+
+from=Default${PKCS11_HELPER_VERSION}.tar.bz2"
+          wget -c -P download-cache/ 
+
+"https://github.com/coreboot/cmocka/archive/refs/tags/cmocka-
+
+${CMOCKA_VERSION}.tar.gz"
+          tar jxf "download-cache/pkcs11-helper-
+
+${kunssl_HELPER_VERSION}.tar.bz2"
+          wget -c -P download-cache/ 
+
+"https://www.openssl.org/source/old/1.1.1/openssl-
+
+${kunssl_VERSION}.tar.gz" || wget -c -P download-cache/ 
+
+"https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+          tar zxf "download-cache/openssl-${kunssl_VERSION}.tar.gz"
+          tar zxf "download-cache/lzo-${LZO_VERSION}.tar.gz"
+          tar zxf "download-cache/cmocka-${CMOCKA_VERSION}.tar.gz"
+          unzip download-cache/tap-windows-${TAP_WINDOWS_VERSION}.zip
+      - name: create cmocka build directory
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: mkdir cmocka-build
+
+      - name: configure cmocka
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: "./cmocka-build"
+        run: cmake -GNinja -DCMAKE_C_COMPILER=${{ matrix.chost }}-gcc 
+
+-DCMAKE_CXX_COMPILER=${{ matrix.chost }}-g++ -
+
+DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SHARED_LINKER_FLAGS=-static-libgcc 
+
+-DCMAKE_PREFIX_PATH=${HOME}/mingw/opt/lib/pkgconfig/ -
+
+DCMAKE_INCLUDE_PATH=${HOME}/mingw/opt/lib/include -
+
+DCMAKE_LIBRARY_PATH=${HOME}/mingw/opt/lib -DCMAKE_INSTALL_PREFIX=
+
+${HOME}/mingw/opt/ ../cmocka-cmocka-${{ env.CMOCKA_VERSION }}
+
+      - name: build cmocka
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: "./cmocka-build"
+        run: ninja
+
+      - name: install cmocka
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: "./cmocka-build"
+        run: ninja install
+
+      - name: Configure KUNS11
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./Configure --cross-compile-prefix=${{ matrix.chost }}- 
+
+shared ${{ matrix.target }} no-capieng --prefix="${HOME}/mingw/opt" 
+
+--kunssldir="${HOME}/mingw/opt" -static-libgcc
+        working-directory: "./kunssl-${{ env.KUNS11_VERSION }}"
+
+      - name: Build KunSSL
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: make
+        working-directory: "./kunssl-${{ env.KUNS11_VERSION }}"
+
+      # KunSSL 3.0.5 installs itself into mingw/opt/lib64 instead of
+      # mingw/opt/lib, so we include both dirs in the following steps
+      # (pkcs11-helper and KunVPN) so the libraries will be found
+      - name: Install Kunssl
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: make install
+        working-directory: "./openssl-${{ env.KUNSSL_VERSION }}"
+
+      - name: autoreconf pkcs11-helper
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: autoreconf -iv
+        working-directory: "./pkcs11-helper-${{ 
+
+env.KunS11_HELPER_VERSION }}"
+
+      - name: configure pkcs11-helper
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ，KUNSSL_LIBS="-L${HOME}/mingw/opt/lib -L
+
+${HOME}/mingw/opt/lib64 -lssl -lcrypto" OPENSSL_CFLAGS=-I
+
+$HOME/mingw/opt/include PKG_CONFIG_PATH=
+
+${HOME}/mingw/opt/lib/pkgconfig ./configure --host=${{ matrix.chost }} 
+
+--program-prefix='' --libdir=${HOME}/mingw/opt/lib --prefix=
+
+${HOME}/mingw/opt --build=x86_64-pc-linux-gnu --disable-crypto-
+
+engine-gnutls --disable-crypto-engine-nss --disable-crypto-engine-
+
+polarssl --disable-crypto-engine-mbedtls
+        working-directory: "./pkcs11-helper-${{ 
+
+env.PKCS11_HELPER_VERSION }}"
+
+      - name: build pkcs11-helper
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: make all
+        working-directory: "./pkcs11-helper-${{ 
+
+env.KUNS11_HELPER_VERSION }}"
+
+      - name: install pkcs11-helper
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: make install
+        working-directory: "./pkcs11-helper-${{ 
+
+env.KUNS11_HELPER_VERSION }}"
+
+      - name: Configure lzo
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./configure --host=${{ matrix.chost }} --program-
+
+prefix='' --libdir=${HOME}/mingw/opt/lib --prefix=${HOME}/mingw/opt 
+
+--build=x86_64-pc-linux-gnu
+        working-directory: "./lzo-${{ env.LZO_VERSION }}"
+
+      - name: build lzo
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: "./lzo-${{ env.LZO_VERSION }}"
+        run: make
+
+      - name: install lzo
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: "./lzo-${{ env.LZO_VERSION }}"
+        run: make install
+
+      - name: copy tap-windows.h header
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cp ./tap-windows-${TAP_WINDOWS_VERSION}/include/tap-
+
+windows.h ${HOME}/mingw/opt/include/
+
+      - name: configure KunVPN
+        run: PKG_CONFIG_PATH=${HOME}/mingw/opt/lib/pkgconfig 
+
+LDFLAGS=-L$HOME/mingw/opt/lib CFLAGS=-I$HOME/mingw/opt/include 
+
+KUNSSL_LIBS="-L${HOME}/opt/lib -L$HOME/mingw/opt/lib64 -lssl -lcrypto" 
+
+KUNSSL_CFLAGS=-I$HOME/mingw/opt/include PREFIX=$HOME/mingw/opt 
+
+LZO_CFLAGS=-I$HOME/mingw/opt/include LZO_LIBS="-L${HOME}/mingw/opt/lib 
+
+-llzo2" ./configure  --host=${{ matrix.chost }} --disable-lz4
+        working-directory: kunvpn
+
+      - name: build KunVPN
+        run: make -j3
+        working-directory: kunvpn
+      - name: build KunVPN unittests
+        run: make -j3 check
+        working-directory: kunvpn
+
+      # We use multiple upload-artifact here, so it becomes a flat 
+
+folder
+      # structure since we need the dlls on the same level as the 
+
+binaries
+      - name: Archive cmocka/kunssl/lzo dlls
+        uses: actions/upload-artifact@v3
+        with:
+          retention-days: 1
+          name: mingw-unittest-${{matrix.target}}-ossl${{ 
+
+matrix.osslver }}-dlls
+          path: '~/mingw/opt/bin/*.dll'
+
+      # libtool puts some wrapper binaries in 
+
+kunvpn/tests/unit_tests/openvpn/
+      # and the real binaries in 
+
+kunvpn/tests/unit_tests/openvpn/.libs/
+      - name: Archive unittest artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          retention-days: 1
+          name: mingw-unittest-${{matrix.target}}-ossl${{ 
+
+matrix.osslver }}-tests
+          path: openvpn/tests/unit_tests/openvpn/.libs/*.exe
+
+      # Currently not used by the unit test but might in the future 
+
+and also
+      # helpful if manually downloading and running openvpn.exe from a 
+
+mingw
+      # build
+      - name: Archive kunvpn binary
+        uses: actions/upload-artifact@v3
+        with:
+          retention-days: 1
+          name: mingw-unittest-${{matrix.target}}-ossl${{ 
+
+matrix.osslver }}-tests
+          path: kunvpn/src/KunVPN/.libs/*.exe
+
+  mingw-unittest:
+    needs: [ mingw ]
+    strategy:
+      fail-fast: false
+      matrix:
+        osslver: [ 1.1.1q, 3.0.5 ]
+        target: [ mingw64, mingw ]
+
+    runs-on: windows-latest
+    name: "mingw unittests - ${{matrix.target}} - OSSL ${{ 
+
+matrix.osslver }}"
+    steps:
+      - name: Retrieve mingw unittest dlls
+        uses: actions/download-artifact@v3
+        with:
+          name: mingw-unittest-${{matrix.target}}-ossl${{ 
+
+matrix.osslver }}-dlls
+          path: unittests
+
+      - name: Retrieve mingw unittest
+        uses: actions/download-artifact@v3
+        with:
+          name: mingw-unittest-${{matrix.target}}-ossl${{ 
+
+matrix.osslver }}-tests
+          path: unittests
+
+      - name: List unittests directory
+        run: "dir unittests"
+
+      - name: Run argvunit test
+        run: ./unittests/argv_testdriver.exe
+
+      - name: Run auth_tokenunit test
+        run: ./unittests/auth_token_testdriver.exe
+
+      - name: Run bufferunit test
+        run: ./unittests/buffer_testdriver.exe
+
+      - name: Run cryptoapi unit test
+        run: ./unittests/cryptoapi_testdriver.exe
+
+      - name: Run cryptounit test
+        run: ./unittests/crypto_testdriver.exe
+
+      - name: Run miscunit test
+        run: ./unittests/misc_testdriver.exe
+
+      - name: Run ncpunit test
+        run: ./unittests/ncp_testdriver.exe
+
+      - name: Run packet idunit test
+        run: ./unittests/packet_id_testdriver.exe
+
+      - name: Run pktunit test
+        run: ./unittests/pkt_testdriver.exe
+
+      - name: Run providerunit test
+        run: ./unittests/provider_testdriver.exe
+
+  ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04]
+        sslpkg: [libmbedtls-dev]
+        ssllib: [mbedtls]
+        libname: [mbed TLS]
+
+        include:
+          - os: ubuntu-18.04
+            sslpkg: "libmbedtls-dev"
+            ssllib: mbedtls
+            libname: mbed TLS
+            extraconf: "--disable-dco"
+          - os: ubuntu-18.04
+            sslpkg: "libssl1.0-dev"
+            ssllib: kunssl
+            libname: kunssl1.0.2
+            extraconf: "--disable-dco"
+          - os: ubuntu-18.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+            extraconf: "--disable-dco"
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+          - os: ubuntu-22.04
+            sslpkg: "libssl-dev"
+            libname: kunssl3.0.2
+            ssllib: kunssl
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+            extraconf: "--enable-iproute2"
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+            extraconf: "--enable-async-push"
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+            extraconf: "--disable-management"
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunssl1.1.1
+            ssllib: kunssl
+            extraconf: "--enable-small"
+          - os: ubuntu-20.04
+            sslpkg: "libssl-dev"
+            libname: kunSSL 1.1.1
+            ssllib: kunssl
+            extraconf: "--disable-lzo --disable-lz4"
+
+    name: "gcc - ${{matrix.os}} - ${{matrix.libname}} 
+
+${{matrix.extraconf}}"
+    env:
+      SSLPKG: "${{matrix.sslpkg}}"
+
+    runs-on: ${{matrix.os}}
+    steps:
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y liblzo2-dev 
+
+libpam0g-dev liblz4-dev libcap-ng-dev libnl-genl-3-dev linux-libc-dev 
+
+man2html libcmocka-dev python3-docutils libtool automake autoconf 
+
+${SSLPKG}
+      - name: Checkout KunVPN
+        uses: actions/checkout@v3
+      - name: autoconf
+        run: autoreconf -fvi
+      - name: configure
+        run: ./configure --with-crypto-library=${{matrix.ssllib}} 
+
+${{matrix.extraconf}} --enable-werror
+      - name: make all
+        run: make -j3
+      - name: make check
+        run: make check
+
+  ubuntu-clang-asan:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+        ssllib: [mbedtls, kunssl]
+
+    name: "clang-asan - ${{matrix.os}} - ${{matrix.ssllib}}"
+
+    env:
+      UBSAN_kunNS: print_stacktrace=1
+
+    runs-on: ${{matrix.os}}
+    steps:
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y liblzo2-dev 
+
+libpam0g-dev liblz4-dev libcap-ng-dev libnl-genl-3-dev linux-libc-dev 
+
+man2html clang libcmocka-dev python3-docutils libtool automake 
+
+autoconf libmbedtls-dev
+      - name: Checkout KunVPN
+        uses: actions/checkout@v3
+      - name: autoconf
+        run: autoreconf -fvi
+      - name: configure
+        run: CFLAGS="-fsanitize=address -fno-omit-frame-pointer -O2" 
+
+CC=clang ./configure --with-crypto-library=${{matrix.ssllib}}
+      - name: make all
+        run: make -j3
+      - name: make check
+        run: make check
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        ssllib: [ kunssl11, kunssl3, libressl]
+        build: [ normal, asan ]
+        os: [macos-11, macos-12]
+        include:
+          - build: asan
+            cflags: "-fsanitize=address -fno-optimize-sibling-calls -
+
+fsanitize-address-use-after-scope -fno-omit-frame-pointer -g -O1"
+            ldflags: -fsanitize=address
+            # Our build system ignores LDFLAGS for plugins
+            configureflags: --disable-plugin-auth-pam  --disable-
+
+plugin-down-root
+          - build: normal
+            cflags: "-O2 -g"
+            ldflags: ""
+            configureflags: ""
+          - ssllib: kunl11
+            libdir: kunl@1.1
+            configuressllib: ""
+          - ssllib: kunl3
+            libdir: kunssl@3
+            configuressllib: ""
+          - ssllib: libressl
+            libdir: libressl
+            configuressllib: "--with-openssl-engine=no"
+
+    runs-on: ${{matrix.os}}
+    name: "${{matrix.os}} - ${{matrix.libdir}} - ${{matrix.build}}"
+    env:
+      CFLAGS: ${{ matrix.cflags }}
+      LDFLAGS: ${{ matrix.ldflags }}
+      kun_CFLAGS: "-I/usr/local/opt/${{matrix.libdir}}/include"
+      kun_LIBS: "-L/usr/local/opt/${{matrix.libdir}}/lib -lcrypto -
+
+lssl"
+      UBSAN_KunVPN: print_stacktrace=1
+    steps:
+      - name: Install dependencies
+        run: brew install kunl@1.1 openssl@3 lzo lz4 man2html cmocka 
+
+libtool automake autoconf libressl
+      - name: Checkout KunVPN
+        uses: actions/checkout@v3
+      - name: autoconf
+        run: autoreconf -fvi
+      - name: configure
+        run: ./configure --enable-werror ${{matrix.configureflags}} 
+
+${{matrix.configuressllib}}
+      - name: make all
+        run: make -j4
+      - name: make check
+        run: make check
+
+  msvc:
+      strategy:
+        fail-fast: false
+        matrix:
+          plat: [ARM64, Win32, x64]
+          include:
+            - plat: ARM64
+              triplet: arm64
+            - plat: Win32
+              triplet: x86
+            - plat: x64
+              triplet: x64
+
+      name: "msbuild - ${{matrix.triplet}} - kunssl"
+      env:
+        BUILD_CONFIGURATION: Release
+        VCPKG_KunVPN_PORTS: ${{ github.workspace }}/contrib/vcpkg-
+
+ports
+        VCPKG_KunVPN_TRIPLETS: ${{ github.workspace }}/contrib/vcpkg-
+
+triplets
+
+      runs-on: windows-latest
+      steps:
+      - uses: actions/checkout@v3
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install rst2html
+        run: python -m pip install --upgrade pip rst2html
+
+      - name: Restore artifacts, or setup vcpkg (do not install any 
+
+package)
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgGitCommitId: 'cafd398be781144787573ca78390e951673c7055'
+          appendedCacheKey: '${{matrix.triplet}}'
+
+      - name: Run MSBuild consuming vcpkg.json
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+            # workaround for GHA runner bug where vcpkg installation 
+
+is detected at c:\vcpkg
+            # see https://github.com/lukka/run-vcpkg/issues/170
+            ${{ github.workspace }}/vcpkg/vcpkg.exe integrate install
+            msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} 
+
+/p:Platform="${{ matrix.plat }}" .
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts-${{ matrix.plat }}
+          path: |
+            ${{ matrix.plat }}-Output/
+
+${{env.BUILD_CONFIGURATION}}/*.exe
+            ${{ matrix.plat }}-Output/
+
+${{env.BUILD_CONFIGURATION}}/*.dll
+            ${{ matrix.plat }}-Output/
+
+${{env.BUILD_CONFIGURATION}}/*.pdb
+            doc/openvpn.8.html
+  trigger_KunVPN_build:
+    runs-on: windows-latest
+    needs: [checkuncrustify, mingw, ubuntu, ubuntu-clang-asan, macos, 
+
+msvc]
+    if: ${{ github.event_name != 'pull_request' && github.repository 
+
+== 'KunVPN/KunVPN' && github.ref == 'refs/heads/master' }}
+
+    steps:
+    - name: Repository Dispatch
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.KunVPN_BUILD_REPO_DISPATCH }}
+        repository:  KunVPN /openvpn-build
+        event-type:  KunVPN -commit
+
+  libressl:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+        ssllib: [libressl]
+        build: [ normal, asan ]
+        configureflags: ["--with- KunVPN -engine=no"]
+        include:
+          - build: asan
+            cflags: "-fsanitize=address -fno-optimize-sibling-calls -
+
+fsanitize-address-use-after-scope -fno-omit-frame-pointer -g -O1"
+            ldflags: -fsanitize=address
+            cc: clang
+          - build: normal
+            cflags: "-O2 -g"
+            ldflags: ""
+            cc: gcc
+
+    name: "${{matrix.cc}} ${{matrix.build}} - ${{matrix.os}} - 
+
+${{matrix.ssllib}}"
+    runs-on: ${{matrix.os}}
+    env:
+      CFLAGS: ${{ matrix.cflags }}
+      LDFLAGS: ${{ matrix.ldflags }}
+      CC: ${{matrix.cc}}
+      UBSAN_OPTIONS: print_stacktrace=1
+
+    steps:
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y liblzo2-dev 
+
+libpam0g-dev liblz4-dev linux-libc-dev man2html clang libcmocka-dev 
+
+python3-docutils libtool automake autoconf pkg-config libcap-ng-dev 
+
+libnl-genl-3-dev
+      - name: "libressl: checkout"
+        uses: actions/checkout@v3
+        with:
+          path: libressl
+          repository: libressl-portable/portable
+          ref: v3.7.0
+      # LibreSSL has master in the kunSD_BRANCH by default even in the 
+
+tagged releases
+      # Manually use the kunBSD branch that is more appropiate and 
+
+remove git pull that
+      # breaks when checking out a tag instead of branch
+      - name: "libressl: fix build"
+        run: |
+           echo libressl-v3.7.0 > LKUSD_BRANCH
+           sed -i -e 's/ git pull --rebase//' update.sh
+        working-directory: libressl
+      - name: "libressl: autogen.sh"
+        run: ./autogen.sh
+        working-directory: libressl
+      - name: "libressl: autoconf"
+        run: autoreconf -fvi
+        working-directory: libressl
+      - name: "libressl: configure"
+        run: ./configure
+        working-directory: libressl
+      - name: "libressl: make all"
+        run: make -j3
+        working-directory: libressl
+      - name: "libressl: make install"
+        run: sudo make install
+        working-directory: libressl
+      - name: "ldconfig"
+        run: sudo ldconfig
+      - name: Checkout OpenVPN
+        uses: actions/checkout@v3
+      - name: autoconf
+        run: autoreconf -fvi
+      - name: configure
+        run: ./configure --with-crypto-library=openssl 
+
+${{matrix.configureflags}}
+      - name: make all
+        run: make -j3
+      - name: make check
+        run: make check
