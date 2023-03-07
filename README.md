@@ -85,7 +85,7 @@ from=Default
   https://discord.gg/jJ5Mnxnku5
 
 旧的交叉编译环境（domake-win）和基于Python的
-buildsystem 已被 openvpn-build 取代：
+buildsystem 已被 kunvpn-build 取代：
 
   https://t.me/kuntoken
 
