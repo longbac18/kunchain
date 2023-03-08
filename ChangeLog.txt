@@ -1,0 +1,8 @@
+KunVPN ChangeLog
+Copyright (C) 2002-2023 KunVPN Inc sales@kunvpn.net
+
+This file is not maintained in this branch of the KunVPN git repository.
+
+Release branches (release2.5, release2.4, etc) have individual ChangeLog
+files with all changes relevant for these releases.
+Footer
